@@ -1,0 +1,124 @@
+[
+  {
+    "id": "tab_smartbin",
+    "type": "tab",
+    "label": "Smart Bin",
+    "disabled": false,
+    "info": ""
+  },
+  {
+    "id": "broker_mosq",
+    "type": "mqtt-broker",
+    "name": "Mosquitto",
+    "broker": "mosquitto",
+    "port": "1883",
+    "clientid": "",
+    "autoConnect": true,
+    "usetls": false,
+    "protocolVersion": "4",
+    "keepalive": "60",
+    "cleansession": true,
+    "autoUnsubscribe": true,
+    "birthTopic": "",
+    "closeTopic": "",
+    "willTopic": ""
+  },
+  {
+    "id": "mqtt_in",
+    "type": "mqtt in",
+    "z": "tab_smartbin",
+    "name": "smartbin/+/data",
+    "topic": "smartbin/+/data",
+    "qos": "0",
+    "datatype": "json",
+    "broker": "broker_mosq",
+    "nl": false,
+    "rap": true,
+    "rh": 0,
+    "inputs": 0,
+    "x": 150,
+    "y": 120,
+    "wires": [
+      [
+        "fn_line",
+        "dbg_raw"
+      ]
+    ]
+  },
+  {
+    "id": "dbg_raw",
+    "type": "debug",
+    "z": "tab_smartbin",
+    "name": "Raw reading",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "x": 380,
+    "y": 60,
+    "wires": []
+  },
+  {
+    "id": "fn_line",
+    "type": "function",
+    "z": "tab_smartbin",
+    "name": "To line protocol",
+    "func": "const p = msg.payload;\nif (typeof p !== \"object\" || typeof p.fill !== \"number\") {\n    node.warn(\"Bad payload: \" + JSON.stringify(p));\n    return null;\n}\nconst bin = msg.topic.split(\"/\")[1] || \"unknown\";\nconst status = String(p.status || \"\").replace(/\"/g, \"\");\nnode.status({fill: p.fill >= 80 ? \"red\" : p.fill >= 50 ? \"yellow\" : \"green\",\n             shape: \"dot\", text: bin + \": \" + p.fill + \"% \" + status});\n// InfluxDB line protocol (timestamp added by InfluxDB on arrival)\nmsg.payload = `bin_level,bin=${bin} fill=${p.fill},distance=${Number(p.distance)},status=\"${status}\"`;\nmsg.headers = {\n    \"Authorization\": \"Token smartbin-token-123\",\n    \"Content-Type\": \"text/plain; charset=utf-8\"\n};\nreturn msg;",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 390,
+    "y": 120,
+    "wires": [
+      [
+        "http_influx"
+      ]
+    ]
+  },
+  {
+    "id": "http_influx",
+    "type": "http request",
+    "z": "tab_smartbin",
+    "name": "Write to InfluxDB",
+    "method": "POST",
+    "ret": "txt",
+    "paytoqs": "ignore",
+    "url": "http://influxdb:8086/api/v2/write?org=smartbin&bucket=bin_data&precision=ns",
+    "tls": "",
+    "persist": false,
+    "proxy": "",
+    "insecureHTTPParser": false,
+    "authType": "",
+    "senderr": false,
+    "headers": [],
+    "x": 620,
+    "y": 120,
+    "wires": [
+      [
+        "dbg_influx"
+      ]
+    ]
+  },
+  {
+    "id": "dbg_influx",
+    "type": "debug",
+    "z": "tab_smartbin",
+    "name": "Influx response (204 = OK)",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": true,
+    "complete": "statusCode",
+    "targetType": "msg",
+    "statusVal": "statusCode",
+    "statusType": "msg",
+    "x": 880,
+    "y": 120,
+    "wires": []
+  }
+]
